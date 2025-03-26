@@ -50,3 +50,17 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+:root {
+  --bg-dark: #1a202c;
+  --bg-light: #f7fafc;
+  --text-dark: #e2e8f0;
+  --text-light: #2d3748;
+}
+body {
+  background: var(--bg-dark);
+  color: var(--text-dark);
+}
+.light body {
+  background: var(--bg-light);
+  color: var(--text-light);
+}

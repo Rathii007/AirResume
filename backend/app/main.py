@@ -1,6 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
 from pydantic import BaseModel
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi_limiter import FastAPILimiter
 from fastapi_limiter.depends import RateLimiter
@@ -13,6 +13,7 @@ import openai
 import os
 import logging
 import time
+import io
 from io import BytesIO
 from dotenv import load_dotenv
 from typing import Optional
@@ -22,12 +23,18 @@ from pathlib import Path
 from pdf2image import convert_from_bytes
 from app.resume_templates import templates
 import docx
+import uvicorn
 
 # Load environment variables
 load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env")
 
-# Load Groq API Key
+# Configuration
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+SPACY_MODEL = os.getenv("SPACY_MODEL", "en_core_web_sm")
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+
 if not GROQ_API_KEY:
     raise ValueError("⚠️ GROQ_API_KEY is missing! Set it in your .env file.")
 
@@ -35,42 +42,65 @@ if not GROQ_API_KEY:
 openai.api_key = GROQ_API_KEY
 openai.api_base = "https://api.groq.com/openai/v1"
 
-# Redis Connection
-REDIS_URL = "redis://localhost:6379"
-
 # Initialize FastAPI
-app = FastAPI()
+app = FastAPI(debug=ENVIRONMENT != "production")
 
-# Enable CORS (open for development; restrict in production)
+# Enable CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
-# Initialize Redis and Rate Limiting
-async def startup_event():
-    redis_client = await redis.from_url(REDIS_URL, encoding="utf-8", decode_responses=True)
-    await FastAPILimiter.init(redis_client)
-
-app.add_event_handler("startup", startup_event)
-
-# Load spaCy model
-nlp = spacy.load("en_core_web_sm")
-
 # Logging Configuration
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO if ENVIRONMENT == "production" else logging.DEBUG,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
 logger = logging.getLogger(__name__)
 
-# Helper Functions
+# Dependency Injection
+async def get_redis():
+    client = await redis.from_url(REDIS_URL, encoding="utf-8", decode_responses=True)
+    try:
+        await client.ping()  # Test connection
+        yield client
+    except redis.ConnectionError as e:
+        logger.error("Failed to connect to Redis: %s", str(e))
+        yield None
+    finally:
+        await client.close()
+
+async def get_nlp():
+    nlp = spacy.load(SPACY_MODEL)
+    yield nlp
+
+# Startup and Shutdown Events
+@app.on_event("startup")
+async def startup_event():
+    redis_client = await redis.from_url(REDIS_URL, encoding="utf-8", decode_responses=True)
+    try:
+        await redis_client.ping()
+        await FastAPILimiter.init(redis_client)
+        logger.info("Application started with Redis connection established.")
+    except redis.ConnectionError as e:
+        logger.warning("Redis connection failed: %s. Rate limiting disabled.", str(e))
+        # FastAPILimiter will not be initialized, effectively disabling rate limiting
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    await FastAPILimiter.close()
+    logger.info("Application shutdown, Redis connection closed.")
+
+# Helper Functions (unchanged logic, optimized)
 def ai_suggestions(prompt_text):
     max_retries = 3
     retry_delay = 15
     for attempt in range(max_retries):
         try:
-            logger.info("Calling Groq API with prompt: %s", prompt_text[:50] + "...")
+            logger.debug("Calling Groq API with prompt: %s", prompt_text[:50] + "...")
             response = openai.ChatCompletion.create(
                 model="llama3-8b-8192",
                 messages=[
@@ -78,12 +108,13 @@ def ai_suggestions(prompt_text):
                     {"role": "user", "content": prompt_text},
                 ]
             )
-            logger.info("Groq API response received successfully")
             return response["choices"][0]["message"]["content"].strip()
         except openai.error.RateLimitError as e:
             if attempt < max_retries - 1:
+                logger.warning("Rate limit hit, retrying in %d seconds...", retry_delay)
                 time.sleep(retry_delay)
             else:
+                logger.error("Rate limit exceeded after %d attempts.", max_retries)
                 return "Rate limit exceeded."
         except Exception as e:
             logger.error("AI Suggestion Error: %s", str(e))
@@ -106,46 +137,40 @@ def extract_text_from_pdf(file_bytes):
         logger.error(f"Failed to extract text from PDF: {str(e)}")
         return ""
 
-def analyze_structure(text):
-    """Check for key resume sections."""
+def analyze_structure(text, nlp=Depends(get_nlp)):
     doc = nlp(text)
     sections = {"experience": False, "education": False, "skills": False}
     for token in doc:
         if token.text.lower() in sections:
             sections[token.text.lower()] = True
-    missing_sections = [k for k, v in sections.items() if not v]
-    return missing_sections
+    return [k for k, v in sections.items() if not v]
 
-def readability_metrics(text):
-    """Calculate readability metrics."""
+def readability_metrics(text, nlp=Depends(get_nlp)):
     doc = nlp(text)
     sentences = list(doc.sents)
     avg_sentence_length = sum(len(sent) for sent in sentences) / len(sentences) if sentences else 0
     return {"avg_sentence_length": avg_sentence_length}
 
-def calculate_ats_score(resume_text):
-    """Simulate an ATS score based on resume quality."""
+def calculate_ats_score(resume_text, nlp=Depends(get_nlp)):
     doc = nlp(resume_text)
     common_keywords = {"python", "java", "sql", "team", "project", "management", "skills", "experience", "education", "certified"}
     resume_words = set([token.text.lower() for token in doc if token.is_alpha])
     keyword_hits = len(common_keywords.intersection(resume_words))
     keyword_score = min((keyword_hits / 10) * 100, 100)
-    missing_sections = analyze_structure(resume_text)
+    missing_sections = analyze_structure(resume_text, nlp)
     structure_score = 100 - (len(missing_sections) * 33)
-    metrics = readability_metrics(resume_text)
+    metrics = readability_metrics(resume_text, nlp)
     readability_score = 100 if metrics['avg_sentence_length'] < 20 else max(0, 100 - (metrics['avg_sentence_length'] - 20) * 5)
     word_count = len(resume_words)
     length_score = 100 if 150 <= word_count <= 500 else 50 if 100 <= word_count < 150 or 500 < word_count <= 700 else 25
-    ats_score = (0.3 * keyword_score) + (0.3 * structure_score) + (0.2 * readability_score) + (0.2 * length_score)
-    return round(ats_score, 2)
+    return round((0.3 * keyword_score) + (0.3 * structure_score) + (0.2 * readability_score) + (0.2 * length_score), 2)
 
 def sanitize_text(text):
-    """Remove control characters and ensure XML compatibility."""
     if not isinstance(text, str):
         return ""
     return ''.join(c for c in text if ord(c) >= 32 or c in '\n\r\t')
 
-# Pydantic Models
+# Pydantic Models (unchanged)
 class SuggestionRequest(BaseModel):
     jobTitle: str
     yearsExperience: str
@@ -165,14 +190,13 @@ class ResumeData(BaseModel):
     template: str
 
 # Improved Resume Extraction
-def improved_extract_resume(file_bytes):
+def improved_extract_resume(file_bytes, nlp=Depends(get_nlp)):
     text = extract_text_from_pdf(file_bytes)
     if not text:
         return {"name": "", "email": "", "phone": "", "education": "", "experience": "", "skills": ""}
     
     doc = nlp(text)
     data = {"name": "", "email": "", "phone": "", "education": "", "experience": "", "skills": ""}
-    
     lines = text.split("\n")
     for i, line in enumerate(lines):
         line = line.strip()
@@ -188,14 +212,42 @@ def improved_extract_resume(file_bytes):
             data["experience"] = "\n".join(lines[i+1:i+6]).strip() if i+1 < len(lines) else line
         if "skills" in line.lower():
             data["skills"] = "\n".join(lines[i+1:i+4]).strip() if i+1 < len(lines) else line
-    
     return {k: sanitize_text(v) for k, v in data.items()}
 
 # Endpoints
+@app.post("/parse-resume/")
+async def parse_resume(file: UploadFile):
+    try:
+        content = await file.read()
+        if file.filename.endswith(".pdf"):
+            pdf_reader = PyPDF2.PdfReader(io.BytesIO(content))
+            text = "".join(page.extract_text() + "\n" for page in pdf_reader.pages)
+        elif file.filename.endswith(".docx"):
+            doc = docx.Document(BytesIO(content))
+            text = "".join(para.text + "\n" for para in doc.paragraphs)
+        else:
+            raise HTTPException(status_code=400, detail="Only PDF and DOCX files are supported.")
+        
+        sections = []
+        current_section = {"title": "", "content": ""}
+        for line in text.split("\n"):
+            if line.isupper() or (len(line) < 30 and line.strip().isalpha()):
+                if current_section["title"]:
+                    sections.append(current_section)
+                current_section = {"title": line.strip(), "content": ""}
+            else:
+                current_section["content"] += line + "\n"
+        if current_section["title"]:
+            sections.append(current_section)
+        return {"sections": sections}
+    except Exception as e:
+        logger.error("Parse resume error: %s", str(e))
+        raise HTTPException(status_code=500, detail=f"Error parsing file: {str(e)}")
+
 @app.post("/extract-resume/")
-async def extract_resume(resume: UploadFile = File(...)):
+async def extract_resume(resume: UploadFile = File(...), nlp=Depends(get_nlp)):
     resume_bytes = await resume.read()
-    return improved_extract_resume(resume_bytes)
+    return improved_extract_resume(resume_bytes, nlp)
 
 @app.post("/suggest-content/")
 async def suggest_content(data: SuggestionRequest):
@@ -229,9 +281,9 @@ async def enhance_section(data: EnhanceRequest):
     return {"enhanced": sanitize_text(enhanced)}
 
 @app.post("/ats-preview/")
-async def ats_preview(data: ResumeData):
+async def ats_preview(data: ResumeData, nlp=Depends(get_nlp)):
     resume_text = f"{data.name}\n{data.email}\n{data.phone}\n{data.education}\n{data.experience}\n{data.skills}"
-    ats_score = calculate_ats_score(resume_text)
+    ats_score = calculate_ats_score(resume_text, nlp)
     return {"ats_score": ats_score}
 
 @app.post("/generate-resume/")
@@ -244,11 +296,9 @@ async def generate_resume(data: dict):
         if data["template"] not in templates:
             raise HTTPException(status_code=400, detail=f"Template '{data['template']}' not found. Available templates: {list(templates.keys())}")
         
-        # Sanitize all data values
         sanitized_data = {k: sanitize_text(v) for k, v in data.items()}
-        templates[sanitized_data["template"]](f"{file_path}.pdf", sanitized_data)
-        
         if format == "pdf":
+            templates[sanitized_data["template"]](f"{file_path}.pdf", sanitized_data)
             with open(f"{file_path}.pdf", "rb") as f:
                 content = f.read()
             os.remove(f"{file_path}.pdf")
@@ -267,22 +317,25 @@ async def generate_resume(data: dict):
     except Exception as e:
         logger.error(f"Generate resume failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to generate resume: {str(e)}")
+    finally:
+        for ext in [".pdf", ".docx"]:
+            temp_file = f"{file_path}{ext}"
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
 
 @app.post("/match-resume/")
 async def match_resume(
     resume: UploadFile = File(...),
-    job_description: Optional[str] = Form(default=None)
+    job_description: Optional[str] = Form(default=None),
+    nlp=Depends(get_nlp)
 ):
-    logger.info(f"Received request: resume={resume.filename}, job_description={job_description}")
     try:
         resume_content = await resume.read()
-        logger.info(f"Resume content length: {len(resume_content)} bytes")
         resume_text = extract_text_from_pdf(resume_content)
-        logger.info(f"Extracted resume text: {resume_text[:100]}...")
         if not resume_text:
             raise HTTPException(status_code=400, detail="No text found in the resume PDF")
 
-        missing_sections = analyze_structure(resume_text)
+        missing_sections = analyze_structure(resume_text, nlp)
         structure_score = max(0, 100 - len(missing_sections) * 20)
         structure_prompt = (
             f"Analyze the structure of this resume:\n{resume_text}\n"
@@ -294,9 +347,8 @@ async def match_resume(
             "Then, provide 3-5 actionable suggestions as bullet points starting with '- '."
         )
         structure_feedback = ai_suggestions(structure_prompt)
-        logger.info(f"Structure feedback: {structure_feedback[:100]}...")
 
-        metrics = readability_metrics(resume_text)
+        metrics = readability_metrics(resume_text, nlp)
         readability_score = min(100, max(0, 100 - (metrics["avg_sentence_length"] - 15) * 5))
         readability_prompt = (
             f"Analyze the readability of this resume:\n{resume_text}\n"
@@ -310,13 +362,11 @@ async def match_resume(
             "Then, provide 3-5 actionable suggestions as bullet points starting with '- '."
         )
         readability_feedback = ai_suggestions(readability_prompt)
-        logger.info(f"Readability feedback: {readability_feedback[:100]}...")
 
         word_count = len(resume_text.split())
         length_score = min(100, max(0, 100 - abs(word_count - 500) * 0.2))
 
         if job_description:
-            logger.info("Processing with job description...")
             def preprocess(text):
                 doc = nlp(text.lower())
                 return " ".join([token.lemma_ for token in doc if not token.is_stop and token.is_alpha])
@@ -330,24 +380,19 @@ async def match_resume(
             resume_keywords = set(processed_resume.split())
             missing_keywords = list(job_keywords - resume_keywords)
             keyword_score = min(100, len(resume_keywords.intersection(job_keywords)) * 10)
-            logger.info(f"Match score: {match_score:.2f}%, Missing keywords: {missing_keywords[:5]}")
 
             overall_match_score = int(
-                (keyword_score * 0.4) +
-                (structure_score * 0.3) +
-                (readability_score * 0.2) +
-                (length_score * 0.1)
+                (keyword_score * 0.4) + (structure_score * 0.3) + (readability_score * 0.2) + (length_score * 0.1)
             )
 
             ai_prompt = (
                 f"You are an expert resume reviewer. Compare this resume:\n{resume_text}\n"
                 f"with this job description:\n{job_description}. "
                 "Provide feedback in the following format:\n"
-                "**Match Quality and Suggestions for Improvement:**\n[Explain the match quality in 1-2 concise sentences. Then, provide 5-7 actionable suggestions as bullet points starting with '- '.]\n"
-                "**Overall Quality, Clarity, and Structure:**\n[Analyze the resume’s overall quality, clarity, and structure in 1-2 concise sentences.]"
+                "**Match Quality and Suggestions for Improvement:**\n[Explain the match quality in 1-2 concise sentences. Then, provide 5-7 actionable suggestions as bullet points starting with '- ' and after completion start the next suggestion in a new line.]\n"
+                "**Overall Quality, Clarity, and Structure:**\n[Analyze the resume’s overall quality, clarity, and structure in 1-2 concise sentences. After every suggestion, start the next suggestion in a new line.]"
             )
             ai_feedback = ai_suggestions(ai_prompt)
-            logger.info(f"AI feedback (with job description): {ai_feedback[:200]}...")
 
             strengths = "No strengths identified."
             overall_quality = "No overall quality feedback provided."
@@ -357,9 +402,7 @@ async def match_resume(
                     strengths_part = feedback_parts[1]
                     if "**Overall Quality, Clarity, and Structure:**" in strengths_part:
                         strengths = strengths_part.split("**Overall Quality, Clarity, and Structure:**")[0].strip()
-                        overall_quality_parts = ai_feedback.split("**Overall Quality, Clarity, and Structure:**")
-                        if len(overall_quality_parts) > 1:
-                            overall_quality = overall_quality_parts[1].strip()
+                        overall_quality = ai_feedback.split("**Overall Quality, Clarity, and Structure:**")[1].strip()
                     else:
                         strengths = strengths_part.strip()
 
@@ -383,24 +426,19 @@ async def match_resume(
                 }
             }
         else:
-            logger.info("Processing without job description...")
-            ats_score = calculate_ats_score(resume_text)
+            ats_score = calculate_ats_score(resume_text, nlp)
             keyword_score = 50
             overall_ats_score = int(
-                (keyword_score * 0.4) +
-                (structure_score * 0.3) +
-                (readability_score * 0.2) +
-                (length_score * 0.1)
+                (keyword_score * 0.4) + (structure_score * 0.3) + (readability_score * 0.2) + (length_score * 0.1)
             )
 
             ai_prompt = (
                 f"You are an expert resume reviewer. Analyze this resume:\n{resume_text}\n"
                 "for ATS compatibility and overall quality. Provide feedback in the following format:\n"
                 "**ATS Readiness:**\n[Explain the ATS compatibility in 2-3 concise sentences.]\n"
-                "**Suggestions:**\n[Provide 3-5 actionable suggestions to improve structure, keyword usage, and readability as bullet points starting with '- '.]"
+                "**Suggestions:**\n[Provide 3-5 actionable suggestions to improve structure, keyword usage, and readability as bullet points starting with '- ' and every new suggestion suggestion should start from a new line.]"
             )
             ai_feedback = ai_suggestions(ai_prompt)
-            logger.info(f"AI feedback (without job description): {ai_feedback[:200]}...")
 
             suggestions = "No specific suggestions provided."
             ats_readiness = "No ATS readiness feedback provided."
@@ -410,9 +448,7 @@ async def match_resume(
                     ats_readiness_part = ats_parts[1]
                     if "**Suggestions:**" in ats_readiness_part:
                         ats_readiness = ats_readiness_part.split("**Suggestions:**")[0].strip()
-                        suggestions_parts = ai_feedback.split("**Suggestions:**")
-                        if len(suggestions_parts) > 1:
-                            suggestions = suggestions_parts[1].strip()
+                        suggestions = ai_feedback.split("**Suggestions:**")[1].strip()
                     else:
                         ats_readiness = ats_readiness_part.strip()
 
@@ -436,19 +472,20 @@ async def match_resume(
             }
     except Exception as e:
         logger.error(f"Job matching failed: {str(e)}")
-        return {"error": f"Failed to process resume. Details: {str(e)}"}
+        raise HTTPException(status_code=500, detail=f"Failed to process resume: {str(e)}")
 
 @app.post("/resume-roast/")
 async def resume_roast(
     file: UploadFile = File(...),
-    roast_level: Optional[str] = Form(default="spicy")
+    roast_level: Optional[str] = Form(default="spicy"),
+    nlp=Depends(get_nlp)
 ):
     try:
         resume_text = extract_text_from_pdf(await file.read())
         if not resume_text:
             return {"roast": "A blank resume? Wow, you’re really letting your *nothingness* shine!"}
-        missing_sections = analyze_structure(resume_text)
-        metrics = readability_metrics(resume_text)
+        missing_sections = analyze_structure(resume_text, nlp)
+        metrics = readability_metrics(resume_text, nlp)
 
         tone_instruction = {
             "mild": "Provide a gentle, lighthearted roast that’s encouraging but still funny.",
@@ -470,12 +507,17 @@ async def resume_roast(
             "Ensure each section is short and punchy. Do not deviate from the specified format, even if a section is missing in the resume."
         )
         ai_roast = ai_suggestions(ai_prompt)
-        logger.info(f"Raw roast response (Level: {roast_level}): {ai_roast}")
         return {"roast": sanitize_text(ai_roast)}
     except Exception as e:
         logger.error(f"Resume roast failed: {str(e)}")
         return {"roast": "This resume broke me—guess it’s *that* tragic!"}
 
 @app.get("/", dependencies=[Depends(RateLimiter(times=5, seconds=60))])
-async def root():
+async def root(redis_client=Depends(get_redis)):
+    if redis_client is None:
+        logger.warning("Rate limiting not enforced due to Redis unavailability.")
     return {"message": "FastAPI Resume API is running!"}
+
+# Run the app
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info" if ENVIRONMENT == "production" else "debug")

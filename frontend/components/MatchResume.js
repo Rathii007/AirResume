@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, Trophy, Rocket, ArrowUp } from "lucide-react";
 import { Radar } from "react-chartjs-2";
@@ -45,6 +45,13 @@ export default function MatchResume() {
   const [showConfetti, setShowConfetti] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [cachedResults, setCachedResults] = useState({});
+  const [dotPositions, setDotPositions] = useState(
+    [...Array(10)].map(() => ({
+      left: `${Math.random() * 100}%`,
+      top: `${Math.random() * 100}%`,
+    }))
+  );
+  const resultRef = useRef(null);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -61,6 +68,9 @@ export default function MatchResume() {
       const score = result.match_score || result.ats_score || 0;
       if (score >= 80 && !(isMobile && hardwareConcurrency < 4)) {
         setShowConfetti(true);
+      }
+      if (resultRef.current) {
+        resultRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
       }
     }
   }, [result]);
@@ -79,6 +89,12 @@ export default function MatchResume() {
       if (score >= 80) {
         setShowConfetti(true);
       }
+      setDotPositions(
+        [...Array(10)].map(() => ({
+          left: `${Math.random() * 100}%`,
+          top: `${Math.random() * 100}%`,
+        }))
+      );
       return;
     }
 
@@ -93,11 +109,6 @@ export default function MatchResume() {
       formData.append("job_description", jobDescription);
     }
 
-    console.log("FormData contents:");
-    for (let [key, value] of formData.entries()) {
-      console.log(`${key}: ${value instanceof File ? value.name : value}`);
-    }
-
     try {
       const res = await fetch(`${API_BASE_URL}/match-resume/`, {
         method: "POST",
@@ -106,17 +117,26 @@ export default function MatchResume() {
 
       if (!res.ok) {
         const errorData = await res.json();
-        throw new Error(errorData.error || "Failed to match resume");
+        throw new Error(
+          errorData.error.includes("empty") || errorData.error.includes("invalid")
+            ? "Oops! It looks like the uploaded file is empty or not a valid resume PDF. Please upload a valid PDF to analyze."
+            : errorData.error || "Something went wrong while analyzing your resume. Please try again."
+        );
       }
 
       const data = await res.json();
-      console.log("Backend response:", data);
       setResult(data);
       setCachedResults((prev) => ({ ...prev, [cacheKey]: data }));
       const score = data.match_score || data.ats_score || 0;
       if (score >= 80) {
         setShowConfetti(true);
       }
+      setDotPositions(
+        [...Array(10)].map(() => ({
+          left: `${Math.random() * 100}%`,
+          top: `${Math.random() * 100}%`,
+        }))
+      );
     } catch (err) {
       setError(err.message);
     } finally {
@@ -198,46 +218,37 @@ export default function MatchResume() {
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.9 }}
-      transition={{ duration: 0.5, ease: "easeInOut" }}
-      className="bg-gray-900 p-4 sm:p-10 rounded-2xl shadow-2xl shadow-purple-500/40 w-full max-w-full sm:max-w-4xl mx-auto relative overflow-hidden"
+      transition={{ duration: 0.1, ease: "easeInOut" }}
+      className="bg-gray-800 p-6 rounded-2xl shadow-2xl w-full max-w-2xl mx-auto relative overflow-hidden"
     >
-      {/* Nebula Background */}
       <div className="absolute inset-0 pointer-events-none z-0">
-        <motion.div
-          className="absolute inset-0 opacity-20"
-          style={{
-            background: "radial-gradient(circle at 20% 20%, rgba(147, 51, 234, 0.3), rgba(0, 0, 0, 0.8))",
-          }}
-          animate={{ scale: [1, 1.1, 1], opacity: [0.2, 0.3, 0.2] }}
-          transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
-        />
-        {[...Array(10)].map((_, i) => (
+        {dotPositions.map((pos, i) => (
           <motion.div
             key={i}
-            className="absolute w-1 h-1 bg-white rounded-full opacity-20 hidden sm:block"
-            style={{ left: `${Math.random() * 100}%`, top: `${Math.random() * 100}%` }}
-            animate={{ scale: [0.5, 1, 0.5], opacity: [0.1, 0.2, 0.1] }}
-            transition={{ duration: 4 + Math.random() * 2, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute w-2 h-2 bg-purple-500 rounded-full opacity-50"
+            style={{ left: pos.left, top: pos.top }}
+            animate={{
+              x: [0, Math.random() * 100 - 50],
+              y: [0, Math.random() * 100 - 50],
+              opacity: [0.3, 0.8, 0.3],
+            }}
+            transition={{
+              duration: 3 + Math.random() * 2,
+              repeat: Infinity,
+              repeatType: "reverse",
+              ease: "easeInOut",
+            }}
           />
         ))}
       </div>
 
-      {/* Sticky Header */}
-      <motion.div
-        className="sticky top-0 bg-gray-900/95 p-4 rounded-t-2xl z-20 shadow-lg shadow-purple-500/20"
-        initial={{ y: -50 }}
-        animate={{ y: 0 }}
-        transition={{ duration: 0.5 }}
-      >
-        <h3 className="text-2xl sm:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-blue-500 text-center">
-          ✨ Match Your Resume ✨
+      <div className="relative z-10">
+        <h3 className="text-2xl sm:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-blue-500 text-center mb-6">
+          ✨ Analyze Your Resume Fit ✨
         </h3>
-      </motion.div>
 
-      {/* Confetti */}
-      {showConfetti && <Confetti width={window.innerWidth} height={window.innerHeight} recycle={false} numberOfPieces={100} />}
+        {showConfetti && <Confetti width={window.innerWidth} height={window.innerHeight} recycle={false} numberOfPieces={100} />}
 
-      <div className="relative z-10 pt-6">
         <form onSubmit={handleSubmit} className="space-y-6 sm:space-y-8">
           <div className="grid grid-cols-1 gap-4 sm:gap-6">
             <div>
@@ -255,7 +266,7 @@ export default function MatchResume() {
                     setResumeFile(file);
                   }
                 }}
-                className="w-full p-3 sm:p-4 bg-gray-800 rounded-lg text-gray-300 border border-gray-700 focus:border-purple-500 focus:ring focus:ring-purple-500/50 transition text-sm sm:text-base"
+                className="w-full p-3 bg-gray-800 rounded-lg text-gray-300 border border-gray-700 focus:border-purple-500 focus:ring focus:ring-purple-500/50 transition text-sm sm:text-base"
               />
             </div>
             <div>
@@ -264,7 +275,7 @@ export default function MatchResume() {
                 value={jobDescription}
                 onChange={(e) => setJobDescription(e.target.value)}
                 placeholder="Paste the job description here to match your resume..."
-                className="w-full p-3 sm:p-4 bg-gray-800 rounded-lg text-gray-300 border border-gray-700 focus:border-purple-500 focus:ring focus:ring-purple-500/50 transition h-24 sm:h-36 resize-none text-sm sm:text-base"
+                className="w-full p-3 bg-gray-800 rounded-lg text-gray-300 border border-gray-700 focus:border-purple-500 focus:ring focus:ring-purple-500/50 transition h-24 sm:h-36 resize-none text-sm sm:text-base"
               />
             </div>
           </div>
@@ -284,13 +295,12 @@ export default function MatchResume() {
               />
             ) : (
               <>
-                <Sparkles className="w-5 h-5 sm:w-6 sm:h-6" /> Analyze Match
+                <Sparkles className="w-5 h-5 sm:w-6 sm:h-6" /> Analyze Resume
               </>
             )}
           </motion.button>
         </form>
 
-        {/* Error Message */}
         <AnimatePresence>
           {error && (
             <motion.div
@@ -304,16 +314,15 @@ export default function MatchResume() {
           )}
         </AnimatePresence>
 
-        {/* Match Results */}
         <AnimatePresence>
           {result && (
             <motion.div
+              ref={resultRef}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="mt-6 sm:mt-10 space-y-6 sm:space-y-8"
             >
-              {/* Reward Badge */}
               <motion.div
                 initial={{ scale: 0, rotate: -180 }}
                 animate={{ scale: 1, rotate: 0 }}
@@ -326,12 +335,11 @@ export default function MatchResume() {
                 </span>
               </motion.div>
 
-              {/* Overall Score */}
               <motion.div
                 initial={{ y: 50, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ delay: 0.2 }}
-                className="bg-gray-800 p-6 sm:p-8 rounded-xl shadow-lg shadow-purple-500/30 relative overflow-hidden"
+                className="bg-gray-800 p-6 rounded-xl shadow-lg relative overflow-hidden"
               >
                 <div className="absolute inset-0 pointer-events-none z-0">
                   {[...Array(5)].map((_, i) => (
@@ -374,13 +382,12 @@ export default function MatchResume() {
                 </div>
               </motion.div>
 
-              {/* Radar Chart */}
               {radarData && (
                 <motion.div
                   initial={{ y: 50, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
                   transition={{ delay: 0.3 }}
-                  className="bg-gray-800 p-6 sm:p-8 rounded-xl shadow-lg shadow-purple-500/30 relative overflow-hidden"
+                  className="bg-gray-800 p-6 rounded-xl shadow-lg relative overflow-hidden"
                 >
                   <div className="absolute inset-0 pointer-events-none z-0">
                     {[...Array(5)].map((_, i) => (
@@ -398,7 +405,6 @@ export default function MatchResume() {
                 </motion.div>
               )}
 
-              {/* Metrics Details */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                 {["keyword_score", "structure_score", "readability_score", "length_score"].map((metric) => (
                   <motion.div
@@ -407,7 +413,7 @@ export default function MatchResume() {
                     animate={{ x: 0, opacity: 1 }}
                     transition={{ delay: 0.4 }}
                     whileHover={{ scale: 1.02, boxShadow: "0 0 15px rgba(147, 51, 234, 0.3)" }}
-                    className="bg-gray-800 p-4 sm:p-6 rounded-xl shadow-lg shadow-purple-500/30 relative overflow-hidden"
+                    className="bg-gray-800 p-6 rounded-xl shadow-lg relative overflow-hidden"
                   >
                     <div className="absolute inset-0 pointer-events-none z-0">
                       {[...Array(3)].map((_, i) => (
@@ -431,7 +437,6 @@ export default function MatchResume() {
                 ))}
               </div>
 
-              {/* Feedback Sections */}
               {["structure_feedback", "readability_feedback", "ai_feedback", "missing_keywords"].map((section, index) => {
                 if (!result[section] || (section === "missing_keywords" && result[section].length === 0)) return null;
                 const title =
@@ -458,7 +463,7 @@ export default function MatchResume() {
                     animate={{ y: 0, opacity: 1 }}
                     transition={{ delay: 0.5 + index * 0.1 }}
                     whileHover={{ scale: 1.01, boxShadow: "0 0 20px rgba(147, 51, 234, 0.4)" }}
-                    className="bg-gray-800 p-6 sm:p-8 rounded-xl shadow-lg shadow-purple-500/30 relative overflow-hidden"
+                    className="bg-gray-800 p-6 rounded-xl shadow-lg relative overflow-hidden"
                   >
                     <div className="absolute inset-0 pointer-events-none z-0">
                       {[...Array(5)].map((_, i) => (
@@ -546,7 +551,6 @@ export default function MatchResume() {
                 );
               })}
 
-              {/* Share Button */}
               <motion.button
                 whileHover={{ scale: 1.05, boxShadow: "0 0 25px rgba(147, 51, 234, 0.7)" }}
                 whileTap={{ scale: 0.95 }}
@@ -570,7 +574,6 @@ export default function MatchResume() {
           )}
         </AnimatePresence>
 
-        {/* Scroll to Top Button */}
         <AnimatePresence>
           {showScrollTop && (
             <motion.button

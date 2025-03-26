@@ -15,38 +15,33 @@ export default function App() {
   const [activeTab, setActiveTab] = useState("landing");
   const [isMounted, setIsMounted] = useState(false);
   const [warpFlash, setWarpFlash] = useState(false);
-  const [particleCount, setParticleCount] = useState(5); // Default particle count
-  const [dotCount, setDotCount] = useState(30); // Default dot count
+  const [particleCount, setParticleCount] = useState(5);
+  const [dotCount, setDotCount] = useState(30);
   const [dots, setDots] = useState([]);
 
-  // Set particle and dot counts based on device capabilities after mounting
   useEffect(() => {
     setIsMounted(true);
 
-    // Check if we're on the client side
     if (typeof window !== "undefined") {
-      // Adjust particle count based on hardware concurrency
       const hardwareConcurrency = window.navigator.hardwareConcurrency || 4;
       setParticleCount(hardwareConcurrency < 4 ? 3 : 5);
 
-      // Detect mobile devices and reduce dot count
       const isMobile = window.matchMedia("(max-width: 768px)").matches;
-      const newDotCount = isMobile ? 15 : 30; // Fewer dots on mobile
+      const newDotCount = isMobile ? 15 : 30;
       setDotCount(newDotCount);
 
-      // Generate dots with pre-calculated positions
       setDots(
         [...Array(newDotCount)].map(() => ({
           left: `${Math.random() * 100}%`,
           top: `${Math.random() * 100}%`,
-          duration: 5 + Math.random() * 3,
+          duration: 3 + Math.random() * 2,
         }))
       );
     }
   }, []);
 
   useEffect(() => {
-    console.log(`Active tab changed to: ${activeTab}`);
+    // console.log(`Active tab changed to: ${activeTab}`);
   }, [activeTab]);
 
   const particlesInit = useCallback(async () => {
@@ -59,7 +54,7 @@ export default function App() {
   const particlesOptions = {
     particles: {
       number: {
-        value: particleCount, // Use dynamic particle count
+        value: particleCount,
         density: {
           enable: true,
           value_area: 800,
@@ -81,7 +76,7 @@ export default function App() {
       },
       move: {
         enable: true,
-        speed: 0.3,
+        speed: 0.5,
         direction: "none",
         random: true,
         out_mode: "out",
@@ -101,16 +96,17 @@ export default function App() {
     visible: {
       opacity: 1,
       transition: {
-        staggerChildren: 0.05,
+        staggerChildren: 0.03,
       },
     },
   };
 
   const letterVariants = {
-    hidden: { opacity: 0, y: 20 },
+    hidden: { opacity: 0, y: 15 },
     visible: {
       opacity: 1,
       y: 0,
+      transition: { duration: 0.3, ease: "easeOut" },
     },
   };
 
@@ -125,16 +121,16 @@ export default function App() {
       opacity: 1,
       scale: 1,
       transition: {
-        opacity: { duration: 0.3, ease: "easeInOut" },
-        scale: { duration: 0.3, ease: "easeInOut" },
+        opacity: { duration: 0.2, ease: "easeInOut" },
+        scale: { duration: 0.2, ease: "easeInOut" },
       },
     },
     exit: {
       opacity: 0,
       scale: 0.98,
       transition: {
-        opacity: { duration: 0.3, ease: "easeInOut" },
-        scale: { duration: 0.3, ease: "easeInOut" },
+        opacity: { duration: 0.2, ease: "easeInOut" },
+        scale: { duration: 0.2, ease: "easeInOut" },
       },
     },
   };
@@ -150,17 +146,30 @@ export default function App() {
   const handleTabChange = debounce((tab) => {
     setWarpFlash(true);
     setActiveTab(tab);
-  }, 300);
+  }, 200);
+
+  const handleRefresh = () => {
+    window.location.reload();
+  };
+
+  // Galaxy-themed cursor (same as in LandingPage.js)
+  const galaxyCursor = `url('data:image/svg+xml;utf8,<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none" stroke="%23D8B4FE" stroke-width="1.5"><circle cx="16" cy="16" r="12" opacity="0.5"/><circle cx="16" cy="16" r="8" opacity="0.7"/><path d="M16 4a12 12 0 0 1 8 8" stroke-dasharray="2"/><path d="M16 28a12 12 0 0 1 -8 -8" stroke-dasharray="2"/><circle cx="16" cy="16" r="3" fill="%23EDE9FE"/></g></svg>') 16 16, auto`;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black relative overflow-hidden">
+      <style>{`
+        .galaxy-cursor:hover {
+          cursor: ${galaxyCursor};
+        }
+      `}</style>
+
       <AnimatePresence>
         {warpFlash && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 0.8 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.3, ease: "easeInOut" }}
+            transition={{ duration: 0.2, ease: "easeInOut" }}
             className="absolute inset-0 bg-gradient-to-r from-purple-500 to-blue-500 z-50 pointer-events-none"
             onAnimationComplete={() => setWarpFlash(false)}
           />
@@ -190,14 +199,14 @@ export default function App() {
           </>
         )}
         <motion.div
-          className="absolute w-16 h-16 bg-purple-700 rounded-full opacity-30 hidden md:block" // Hide on mobile
+          className="absolute w-16 h-16 bg-purple-700 rounded-full opacity-30 hidden md:block"
           style={{ left: "10%", top: "15%" }}
           animate={{
             x: [0, 30, 0],
             y: [0, 15, 0],
           }}
           transition={{
-            duration: 10,
+            duration: 8,
             repeat: Infinity,
             repeatType: "reverse",
             ease: "easeInOut",
@@ -209,14 +218,14 @@ export default function App() {
           />
         </motion.div>
         <motion.div
-          className="absolute w-12 h-12 bg-blue-600 rounded-full opacity-30 hidden md:block" // Hide on mobile
+          className="absolute w-12 h-12 bg-blue-600 rounded-full opacity-30 hidden md:block"
           style={{ right: "15%", bottom: "20%" }}
           animate={{
             x: [0, -25, 0],
             y: [0, -10, 0],
           }}
           transition={{
-            duration: 12,
+            duration: 10,
             repeat: Infinity,
             repeatType: "reverse",
             ease: "easeInOut",
@@ -228,14 +237,14 @@ export default function App() {
           />
         </motion.div>
         <motion.div
-          className="absolute w-24 h-24 bg-yellow-400 rounded-full opacity-20 hidden md:block" // Hide on mobile
+          className="absolute w-24 h-24 bg-yellow-400 rounded-full opacity-20 hidden md:block"
           style={{ right: "5%", top: "5%" }}
           animate={{
             scale: [1, 1.3, 1],
             opacity: [0.15, 0.25, 0.15],
           }}
           transition={{
-            duration: 6,
+            duration: 5,
             repeat: Infinity,
             repeatType: "reverse",
             ease: "easeInOut",
@@ -254,11 +263,11 @@ export default function App() {
                 scaleY: [1, 1.8, 1],
               }}
               transition={{
-                duration: 3,
+                duration: 2,
                 repeat: Infinity,
                 repeatType: "reverse",
                 ease: "easeInOut",
-                delay: i * 0.2,
+                delay: i * 0.1,
               }}
             />
           ))}
@@ -275,18 +284,20 @@ export default function App() {
             />
           </div>
           <div className="flex flex-col sm:flex-row sm:justify-between items-center relative z-10 space-y-4 sm:space-y-0">
-            <motion.h1
-              className="text-3xl sm:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-blue-500"
+            <motion.button
+              onClick={handleRefresh}
+              className="galaxy-cursor text-3xl sm:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-blue-500"
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 1, ease: "easeOut" }}
+              transition={{ duration: 0.6, ease: "easeOut" }}
               whileHover={{
                 scale: 1.05,
                 textShadow: "0 0 20px rgba(147, 51, 234, 0.8)",
               }}
+              whileTap={{ scale: 0.95 }}
             >
               AirResume
-            </motion.h1>
+            </motion.button>
             <motion.p
               className="text-base sm:text-lg text-gray-300 font-medium text-center sm:text-right"
               variants={punchlineVariants}
@@ -302,9 +313,9 @@ export default function App() {
                 className="inline-block text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-blue-500"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                transition={{ delay: 2, duration: 1 }}
+                transition={{ delay: 1.5, duration: 0.8 }}
               >
-                courtesy of xAI’s Grok.
+                "🚀 AirResume – Your AI-Powered Gateway to the Perfect Job! ✨"
               </motion.span>
             </motion.p>
           </div>
@@ -316,28 +327,30 @@ export default function App() {
               <motion.button
                 key={tab}
                 onClick={() => {
-                  console.log(`Switching to tab: ${tab}`);
+                  // console.log(`Switching to tab: ${tab}`);
                   handleTabChange(tab);
                 }}
-                className={`px-3 py-2 sm:px-4 sm:py-2 rounded-md font-semibold transition-colors text-sm sm:text-base ${
+                className={`galaxy-cursor px-3 py-2 sm:px-4 sm:py-2 rounded-md font-semibold transition-colors text-sm sm:text-base ${
                   activeTab === tab
                     ? "bg-blue-500 text-white"
                     : "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                } m-1 touch-manipulation`} // Added touch-manipulation for better mobile touch
+                } m-1 touch-manipulation`}
                 whileHover={{ scale: 1.1, boxShadow: "0 0 15px rgba(59, 130, 246, 0.5)" }}
                 whileTap={{ scale: 0.95 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
               >
                 {tab.charAt(0).toUpperCase() + tab.slice(1)}
               </motion.button>
             ))}
             <motion.button
               onClick={() => {
-                console.log("Switching to landing");
+                // console.log("Switching to landing");
                 handleTabChange("landing");
               }}
-              className="px-3 py-2 sm:px-4 sm:py-2 rounded-md font-semibold bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors text-sm sm:text-base m-1 touch-manipulation"
+              className="galaxy-cursor px-3 py-2 sm:px-4 sm:py-2 rounded-md font-semibold bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors text-sm sm:text-base m-1 touch-manipulation"
               whileHover={{ scale: 1.1, boxShadow: "0 0 15px rgba(59, 130, 246, 0.5)" }}
               whileTap={{ scale: 0.95 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
             >
               Home
             </motion.button>

@@ -1,6 +1,7 @@
+"use client";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles } from "lucide-react"; // For particle icon
+import { Sparkles } from "lucide-react";
 
 const API_BASE_URL = "http://localhost:8000";
 
@@ -30,11 +31,6 @@ export default function RoastResume() {
     formData.append("file", resumeFile);
     formData.append("roast_level", roastLevel.toLowerCase());
 
-    console.log("FormData contents:");
-    for (let [key, value] of formData.entries()) {
-      console.log(`${key}: ${value instanceof File ? value.name : value}`);
-    }
-
     try {
       const res = await fetch(`${API_BASE_URL}/resume-roast/`, {
         method: "POST",
@@ -47,8 +43,6 @@ export default function RoastResume() {
       }
 
       const data = await res.json();
-      console.log("Backend response:", data);
-      console.log("Raw roast:", data.roast);
       setResult(data);
     } catch (err) {
       setError(err.message);
@@ -136,7 +130,6 @@ export default function RoastResume() {
       exit={{ opacity: 0, y: -50 }}
       className="bg-gray-900 p-8 rounded-xl shadow-2xl shadow-purple-500/30 max-w-2xl mx-auto relative overflow-hidden"
     >
-      {/* Background Particle Effect */}
       <div className="absolute inset-0 pointer-events-none">
         {[...Array(10)].map((_, i) => (
           <motion.div
@@ -223,7 +216,6 @@ export default function RoastResume() {
         </motion.button>
       </form>
 
-      {/* Error Message */}
       <AnimatePresence>
         {error && (
           <motion.div
@@ -237,7 +229,6 @@ export default function RoastResume() {
         )}
       </AnimatePresence>
 
-      {/* Roast Results */}
       <AnimatePresence>
         {result && result.roast && (
           <motion.div
@@ -246,7 +237,6 @@ export default function RoastResume() {
             exit={{ opacity: 0, y: -20 }}
             className="mt-8 space-y-6 relative z-10"
           >
-            {/* Roast Severity Indicator */}
             <motion.div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
@@ -267,14 +257,13 @@ export default function RoastResume() {
               </span>
             </motion.div>
 
-            {/* Current Section */}
             <AnimatePresence mode="wait">
               <motion.div
                 key={currentSectionIndex}
                 initial={{ opacity: 0, x: 50 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -50 }}
-                transition={{ duration: 0.5 }}
+                transition={{ duration: 0.1 }}
                 className="bg-gray-800 p-6 rounded-lg shadow-lg shadow-purple-500/20"
               >
                 <h4 className="text-xl font-semibold text-purple-400 mb-4 capitalize">
@@ -287,7 +276,6 @@ export default function RoastResume() {
               </motion.div>
             </AnimatePresence>
 
-            {/* Navigation Buttons */}
             <div className="flex justify-between">
               <motion.button
                 whileHover={{ scale: 1.05 }}
@@ -309,7 +297,6 @@ export default function RoastResume() {
               </motion.button>
             </div>
 
-            {/* Share Button */}
             <motion.button
               whileHover={{ scale: 1.05, boxShadow: "0 0 15px rgba(147, 51, 234, 0.5)" }}
               whileTap={{ scale: 0.95 }}
