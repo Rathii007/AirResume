@@ -1,13 +1,24 @@
 # AirResume 🚀
 
-A web app to generate, match, and roast resumes with a cosmic twist! Built with a Next.js frontend and FastAPI backend, it includes a feedback form with client-side rate limiting and stores feedback in a SQLite database.
+A web app to generate, match, and roast resumes. Built with a Next.js frontend and FastAPI backend, it includes a feedback form that stores responses in a SQLite database.
 
 ## ✨ Features
 
 - Generate, match, and roast resumes.
-- Feedback form with client-side rate limiting (5 submissions per minute).
+- Feedback form to share your thoughts.
 - Space-themed UI with animations.
-- SQLite database for feedback storage.
+
+## 🛠️ Technologies Used
+
+- **Frontend**:
+  - Next.js (React framework)
+  - Tailwind CSS (styling)
+  - Framer Motion (animations)
+- **Backend**:
+  - FastAPI (Python web framework)
+  - SQLite (database for feedback)
+- **Tools**:
+  - DB Browser for SQLite (to view feedback)
 
 ## 🚀 Getting Started
 
@@ -21,7 +32,7 @@ A web app to generate, match, and roast resumes with a cosmic twist! Built with 
 
 1. **Clone the Repo**:
    ```bash
-   git clone https://github.com/Rathii007/AirResume
+   git clone https://github.com/Rathii007/AirResume.git
    cd AirResume
    ```
 
@@ -62,14 +73,8 @@ A web app to generate, match, and roast resumes with a cosmic twist! Built with 
 
 - Open `http://localhost:3000` in your browser.
 - Use the tabs to generate, match, or roast a resume.
-- Submit feedback via the Feedback tab (limited to 5 submissions per minute).
+- Submit feedback via the Feedback tab.
 - To view feedback, open `backend/feedback.db` in DB Browser for SQLite and check the `feedback` table.
-
-## 🛡️ Rate Limiting
-
-- The feedback form uses client-side rate limiting (5 submissions per minute).
-- If exceeded, a countdown timer shows when you can submit again.
-- Timestamps are stored in `localStorage` under `feedbackSubmissions`.
 
 ## 📄 License
 
