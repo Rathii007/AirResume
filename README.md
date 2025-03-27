@@ -21,7 +21,7 @@ A web app to generate, match, and roast resumes with a cosmic twist! Built with 
 
 1. **Clone the Repo**:
    ```bash
-   git clone <your-repo-url>
+   git clone https://github.com/Rathii007/AirResume
    cd AirResume
    ```
 
