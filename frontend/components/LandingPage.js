@@ -143,13 +143,10 @@ export default function LandingPage({ setActiveTab }) {
 
       <section className="min-h-screen flex flex-col justify-center items-center text-center px-6 relative z-10">
         <MotionP
-          // onClick={handleRefresh}
           className="galaxy-cursor text-6xl md:text-8xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-blue-500 mb-6"
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 1, ease: "easeOut" }}
-          // whileHover={{ scale: 1.05 }}
-          // whileTap={{ scale: 0.95 }}
         >
           AirResume
         </MotionP>
@@ -310,12 +307,19 @@ export default function LandingPage({ setActiveTab }) {
           <Link href="/about" className="galaxy-cursor hover:text-purple-400 transition">About</Link>
           <Link href="/contact" className="galaxy-cursor hover:text-purple-400 transition">Contact</Link>
           <Link href="/privacy" className="galaxy-cursor hover:text-purple-400 transition">Privacy Policy</Link>
+          {/* Add Feedback Link */}
+          <button
+            onClick={() => setActiveTab("feedback")}
+            className="galaxy-cursor hover:text-purple-400 transition"
+          >
+            Feedback
+          </button>
           <MotionDiv
             whileHover={{ scale: 1.2, rotate: 360 }}
             transition={{ duration: 0.4, ease: "easeOut" }}
             className="galaxy-cursor inline-block text-gray-400 hover:text-purple-400 transition"
           >
-            <a href="https://www.linkedin.com/in/mayank-rathi07/" target="_blank" rel="noopener noreferrer">
+            <a href="https://www.linkedin.com/" target="_blank" rel="noopener noreferrer">
               <FaLinkedin className="w-6 h-6" />
             </a>
           </MotionDiv>

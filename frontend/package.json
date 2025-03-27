@@ -16,16 +16,17 @@
     "@tinymce/tinymce-react": "^6.0.0",
     "@tsparticles/engine": "^3.8.1",
     "@tsparticles/react": "^3.0.0",
-    "buffer": "^6.0.3",
     "chart.js": "^4.4.8",
     "dom-to-image-more": "^3.5.0",
-    "framer-motion": "^12.6.0",
+    "framer-motion": "^12.6.2",
     "frontend": "file:",
     "html-docx-js": "^0.3.1",
     "immer": "^10.1.1",
     "jspdf": "^3.0.1",
+    "jszip": "^3.10.1",
     "konva": "^9.3.20",
     "lexical": "^0.29.0",
+    "lodash.merge": "^4.6.2",
     "lucide-react": "^0.483.0",
     "mammoth": "^1.8.0",
     "next": "^15.2.4",
@@ -51,5 +52,9 @@
     "autoprefixer": "^10.4.21",
     "postcss": "^8.5.3",
     "tailwindcss": "^4.0.15"
+  },
+  "resolutions": {
+    "jszip": "3.10.1",
+    "lodash.merge": "4.6.2"
   }
 }

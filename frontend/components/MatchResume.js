@@ -243,7 +243,7 @@ export default function MatchResume() {
       </div>
 
       <div className="relative z-10">
-        <h3 className="text-2xl sm:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-blue-500 text-center mb-6">
+        <h3 className="text-3xl font-bold text-purple-400 mb-6 text-center relative z-10">
           ✨ Analyze Your Resume Fit ✨
         </h3>
 

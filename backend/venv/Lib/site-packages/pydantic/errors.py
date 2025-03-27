@@ -37,7 +37,6 @@ PydanticErrorCodes = Literal[
     'model-field-missing-annotation',
     'config-both',
     'removed-kwargs',
-    'circular-reference-schema',
     'invalid-for-json-schema',
     'json-schema-already-used',
     'base-model-instantiated',
@@ -67,10 +66,6 @@ PydanticErrorCodes = Literal[
     'model-config-invalid-field-name',
     'with-config-on-model',
     'dataclass-on-model',
-    'validate-call-type',
-    'unpack-typed-dict',
-    'overlapping-unpack-typed-dict',
-    'invalid-self-type',
 ]
 
 

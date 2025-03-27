@@ -10,6 +10,7 @@ const MatchResume = dynamic(() => import("@/components/MatchResume"), { ssr: fal
 const GenerateResume = dynamic(() => import("@/components/GenerateResume"), { ssr: false });
 const RoastResume = dynamic(() => import("@/components/RoastResume"), { ssr: false });
 const LandingPage = dynamic(() => import("@/components/LandingPage"), { ssr: false });
+const Feedback = dynamic(() => import("@/components/Feedback"), { ssr: false }); // Added Feedback import
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("landing");
@@ -41,7 +42,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    // console.log(`Active tab changed to: ${activeTab}`);
+    console.log(`Active tab changed to: ${activeTab}`); // Debug: Log activeTab changes
   }, [activeTab]);
 
   const particlesInit = useCallback(async () => {
@@ -144,6 +145,7 @@ export default function App() {
   };
 
   const handleTabChange = debounce((tab) => {
+    console.log(`handleTabChange called with tab: ${tab}`); // Debug: Log when handleTabChange is called
     setWarpFlash(true);
     setActiveTab(tab);
   }, 200);
@@ -323,11 +325,11 @@ export default function App() {
 
         {activeTab !== "landing" && (
           <nav className="flex justify-center space-x-2 sm:space-x-4 mb-6 sm:mb-8 z-20 flex-wrap px-4">
-            {["match", "generate", "roast"].map((tab) => (
+            {["match", "generate", "roast", "feedback"].map((tab) => ( // Added "feedback" to nav tabs
               <motion.button
                 key={tab}
                 onClick={() => {
-                  // console.log(`Switching to tab: ${tab}`);
+                  console.log(`Nav button clicked: Switching to tab ${tab}`); // Debug: Log nav button clicks
                   handleTabChange(tab);
                 }}
                 className={`galaxy-cursor px-3 py-2 sm:px-4 sm:py-2 rounded-md font-semibold transition-colors text-sm sm:text-base ${
@@ -344,7 +346,7 @@ export default function App() {
             ))}
             <motion.button
               onClick={() => {
-                // console.log("Switching to landing");
+                console.log("Nav button clicked: Switching to landing"); // Debug: Log nav button click for Home
                 handleTabChange("landing");
               }}
               className="galaxy-cursor px-3 py-2 sm:px-4 sm:py-2 rounded-md font-semibold bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors text-sm sm:text-base m-1 touch-manipulation"
@@ -368,10 +370,17 @@ export default function App() {
               className="w-full max-w-full sm:max-w-4xl will-change-transform"
               style={{ transformStyle: "preserve-3d" }}
             >
+              {console.log(`Rendering main with activeTab: ${activeTab}`)} {/* Debug: Log current activeTab */}
               {activeTab === "landing" && <LandingPage setActiveTab={setActiveTab} />}
               {activeTab === "match" && <MatchResume />}
               {activeTab === "generate" && <GenerateResume />}
               {activeTab === "roast" && <RoastResume />}
+              {activeTab === "feedback" && (
+                <>
+                  {console.log("Rendering Feedback component")} {/* Debug: Confirm Feedback is rendering */}
+                  <Feedback />
+                </>
+              )}
             </motion.div>
           </AnimatePresence>
         </main>

@@ -4,12 +4,13 @@ pydantic
 spacy
 PyPDF2
 pytesseract
-pillow
+Pillow
 redis
 openai
 python-dotenv
 scikit-learn
 pdf2image
-python-docx
-fastapi-limiter
 reportlab
+python-docx
+python-jose[cryptography]
+passlib[bcrypt]
